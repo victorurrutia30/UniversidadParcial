@@ -1,7 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using DAL.Context;
 using Entity.Models;
@@ -22,8 +20,9 @@ namespace BLL.Services
         {
             return _ctx.Estudiantes
                        .Include(e => e.Carrera)
-                       .ThenInclude(c => c.Facultad)
+                           .ThenInclude(c => c.Facultad)
                        .AsNoTracking()
+                       .OrderBy(e => e.Apellidos).ThenBy(e => e.Nombres)
                        .ToListAsync();
         }
 
@@ -31,9 +30,47 @@ namespace BLL.Services
         {
             return _ctx.Estudiantes
                        .Include(e => e.Carrera)
-                       .ThenInclude(c => c.Facultad)
+                           .ThenInclude(c => c.Facultad)
                        .AsNoTracking()
                        .FirstOrDefaultAsync(e => e.EstudianteId == id);
+        }
+
+        // --- NUEVO: buscar por carné exacto
+        public Task<Estudiante?> BuscarPorCarneAsync(string carne)
+        {
+            return _ctx.Estudiantes
+                       .Include(e => e.Carrera)
+                           .ThenInclude(c => c.Facultad)
+                       .AsNoTracking()
+                       .FirstOrDefaultAsync(e => e.Carne == carne);
+        }
+
+        // --- NUEVO: búsqueda libre por texto y/o carrera
+        public Task<List<Estudiante>> BuscarAsync(string? texto, int? carreraId)
+        {
+            var query = _ctx.Estudiantes
+                            .Include(e => e.Carrera)
+                                .ThenInclude(c => c.Facultad)
+                            .AsNoTracking()
+                            .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(texto))
+            {
+                var t = texto.Trim();
+                query = query.Where(e =>
+                    e.Carne.Contains(t) ||
+                    e.Nombres.Contains(t) ||
+                    e.Apellidos.Contains(t));
+            }
+
+            if (carreraId.HasValue)
+            {
+                query = query.Where(e => e.CarreraId == carreraId.Value);
+            }
+
+            return query
+                .OrderBy(e => e.Apellidos).ThenBy(e => e.Nombres)
+                .ToListAsync();
         }
 
         public async Task<Estudiante> CrearAsync(Estudiante nuevo)
