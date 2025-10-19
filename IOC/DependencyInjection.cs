@@ -33,12 +33,17 @@ namespace IOC
 
             // ----- Firebase Storage (desde appsettings: "Firebase" section) -----
             var fbSection = configuration.GetSection("Firebase");
+
+            bool TryBool(string? s, bool defaultValue)
+                => bool.TryParse(s, out var v) ? v : defaultValue;
+
             var options = new FirebaseStorageOptions
             {
-                Bucket = fbSection.GetValue<string>("Bucket") ?? string.Empty,
-                CredentialsFile = fbSection.GetValue<string>("CredentialsFile") ?? string.Empty,
-                MakePublicOnUpload = fbSection.GetValue<bool?>("MakePublicOnUpload") ?? true
+                Bucket = fbSection["Bucket"] ?? string.Empty,
+                CredentialsFile = fbSection["CredentialsFile"] ?? string.Empty,
+                MakePublicOnUpload = TryBool(fbSection["MakePublicOnUpload"], true)
             };
+
 
             services.AddSingleton(options);
             services.AddScoped<IFileStorageService, FirebaseStorageService>();

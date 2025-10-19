@@ -1,20 +1,17 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System;
 using System.IO;
 using System.Net;
 using System.Threading;
+using System.Threading.Tasks;
 using Google.Apis.Auth.OAuth2;
+using Google.Apis.Storage.v1;           // <- Necesario para PredefinedObjectAcl
 using Google.Cloud.Storage.V1;
 
 namespace BLL.Storage
 {
     /// <summary>
     /// Implementación usando Google Cloud Storage (bucket de Firebase Storage).
-    /// Requiere un Service Account JSON con permisos de Storage Admin/Writer.
+    /// Requiere un Service Account JSON con permisos de Storage (p.ej. Storage Object Admin).
     /// </summary>
     public class FirebaseStorageService : IFileStorageService
     {
@@ -42,31 +39,29 @@ namespace BLL.Storage
             if (string.IsNullOrWhiteSpace(contentType))
                 contentType = "application/octet-stream";
 
+            // Si queremos que sea público al subir, usamos PredefinedAcl = PublicRead
+            var uploadOptions = new UploadObjectOptions();
+            if (_options.MakePublicOnUpload)
+            {
+                uploadOptions.PredefinedAcl = PredefinedObjectAcl.PublicRead;
+            }
+
             var obj = await _client.UploadObjectAsync(
                 bucket: _options.Bucket,
                 objectName: objectName,
                 contentType: contentType,
                 source: content,
+                options: uploadOptions,
                 cancellationToken: ct
             ).ConfigureAwait(false);
 
+            // Si es público, devolvemos la URL HTTP pública.
             if (_options.MakePublicOnUpload)
             {
-                // Hacer el objeto público (ACL legacy). Alternativa: firmar URL temporal.
-                await _client.UpdateObjectAclAsync(_options.Bucket, objectName, new[]
-                {
-                    new Google.Apis.Storage.v1.Data.ObjectAccessControl
-                    {
-                        Entity = "allUsers",
-                        Role = "READER"
-                    }
-                }, cancellationToken: ct).ConfigureAwait(false);
-
-                // URL pública estándar
                 return $"https://storage.googleapis.com/{WebUtility.UrlEncode(_options.Bucket)}/{WebUtility.UrlEncode(objectName)}";
             }
 
-            // Retorna la ruta interna
+            // Si no es público, devolvemos la ruta gs://
             return $"gs://{_options.Bucket}/{objectName}";
         }
 
@@ -80,9 +75,9 @@ namespace BLL.Storage
                 await _client.DeleteObjectAsync(_options.Bucket, objectName, cancellationToken: ct).ConfigureAwait(false);
                 return true;
             }
-            catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == HttpStatusCode.NotFound)
+            catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                // No existe; para nuestro caso lo tratamos como "eliminado"
+                // No existe; lo tratamos como "no eliminado"
                 return false;
             }
         }
